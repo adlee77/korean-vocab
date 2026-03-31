@@ -77,8 +77,11 @@ def migrate_andrews_progress():
         conn.close()
         return
     user_id = row["id"]
-    count = conn.execute("SELECT COUNT(*) FROM user_progress WHERE user_id=?", (user_id,)).fetchone()[0]
-    if count > 0:
+    already = conn.execute(
+        "SELECT COUNT(*) FROM user_progress WHERE user_id=? AND memorized=1", (user_id,)
+    ).fetchone()[0]
+    expected = conn.execute("SELECT COUNT(*) FROM vocab WHERE memorized=1").fetchone()[0]
+    if already >= expected:
         conn.close()
         return
     # Copy memorized words from vocab table into user_progress
