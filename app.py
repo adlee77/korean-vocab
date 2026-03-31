@@ -8,7 +8,20 @@ import time
 from functools import wraps
 
 from flask import Flask, jsonify, render_template_string, request, session, redirect, url_for, flash
-from werkzeug.security import generate_password_hash, check_password_hash
+import hashlib
+
+def generate_password_hash(password):
+    salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 260000)
+    return f"pbkdf2:sha256:{salt}:{h.hex()}"
+
+def check_password_hash(stored, password):
+    try:
+        _, _, salt, h = stored.split(':', 3)
+        check = hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 260000)
+        return check.hex() == h
+    except Exception:
+        return False
 import secrets
 
 DB_PATH = os.path.expanduser("~/Projects/korean-vocab/vocab.db")
