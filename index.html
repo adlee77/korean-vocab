@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>한국어 단어 학습</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    :root {
+      --navy: #0d1b2e;
+      --navy-mid: #132338;
+      --navy-light: #1e3352;
+      --gold: #c9a84c;
+      --gold-light: #e8c97a;
+      --gold-dim: #7a6130;
+      --white: #f0f4ff;
+      --muted: #8899bb;
+      --card-bg: #162340;
+      --card-border: #1e3a5f;
+      --success: #4caf79;
+      --review: #e05252;
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--navy);
+      color: var(--white);
+      min-height: 100vh;
+    }
+
+    /* ── Auth pages ── */
+    #auth-page {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .auth-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .auth-box h1 {
+      font-size: 1.5rem;
+      color: var(--gold-light);
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .auth-box .subtitle {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.875rem;
+      margin-bottom: 28px;
+    }
+
+    .form-group { margin-bottom: 16px; }
+
+    .form-group label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--navy-light);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--white);
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus { border-color: var(--gold); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--gold);
+      color: var(--navy);
+      width: 100%;
+      margin-top: 8px;
+    }
+    .btn-primary:hover { background: var(--gold-light); }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--gold);
+      border: 1px solid var(--gold-dim);
+      padding: 8px 16px;
+      font-size: 0.875rem;
+    }
+    .btn-ghost:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { filter: brightness(1.1); }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--white);
+      border: 1px solid var(--card-border);
+    }
+    .btn-outline:hover { border-color: var(--muted); }
+
+    .btn-danger { background: var(--review); color: #fff; }
+    .btn-danger:hover { filter: brightness(1.1); }
+
+    .auth-switch {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    .auth-switch a { color: var(--gold); text-decoration: none; cursor: pointer; }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    .error-msg {
+      background: rgba(224,82,82,0.15);
+      border: 1px solid rgba(224,82,82,0.4);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      color: #ff8a8a;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* ── App layout ── */
+    #app-page { display: none; min-height: 100vh; }
+    #manage-page { display: none; min-height: 100vh; }
+
+    .app-header {
+      background: var(--navy-mid);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .app-header h1 {
+      font-size: 1.1rem;
+      color: var(--gold-light);
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .header-user {
+      font-size: 0.8rem;
+      color: var(--muted);
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── Main flashcard content ── */
+    .main-content {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    /* ── Filter pills ── */
+    .filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .pill {
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--card-border);
+      background: transparent;
+      color: var(--muted);
+      transition: all 0.15s;
+      letter-spacing: 0.3px;
+    }
+    .pill:hover { border-color: var(--gold-dim); color: var(--white); }
+    .pill.active {
+      background: var(--gold);
+      border-color: var(--gold);
+      color: var(--navy);
+    }
+
+    /* ── Progress bar ── */
+    .progress-wrap {
+      margin-bottom: 24px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: var(--navy-light);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    /* ── Flashcard ── */
+    .card-scene {
+      perspective: 1000px;
+      margin-bottom: 24px;
+      cursor: pointer;
+    }
+
+    .card-inner {
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.45s ease;
+      min-height: 260px;
+    }
+
+    .card-scene.flipped .card-inner { transform: rotateY(180deg); }
+
+    .card-face {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 32px 24px;
+      text-align: center;
+      min-height: 260px;
+    }
+
+    .card-back { transform: rotateY(180deg); }
+
+    .card-korean {
+      font-size: clamp(1.8rem, 6vw, 2.8rem);
+      font-weight: 700;
+      color: var(--white);
+      line-height: 1.3;
+      margin-bottom: 12px;
+    }
+
+    .card-tap-hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 16px;
+    }
+
+    .card-english {
+      font-size: clamp(1rem, 3vw, 1.4rem);
+      color: var(--gold-light);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+
+    .card-korean-small {
+      font-size: 1rem;
+      color: var(--muted);
+    }
+
+    .card-meta {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    /* ── Action buttons ── */
+    .action-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    .action-row .btn {
+      flex: 1;
+      max-width: 200px;
+    }
+
+    /* ── Completion screen ── */
+    .completion {
+      text-align: center;
+      padding: 48px 24px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+    }
+
+    .completion .emoji { font-size: 3rem; margin-bottom: 16px; }
+    .completion h2 { font-size: 1.5rem; color: var(--gold-light); margin-bottom: 8px; }
+    .completion p { color: var(--muted); margin-bottom: 24px; }
+
+    /* ── Loading state ── */
+    .loading {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--card-border);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Word management page ── */
+    .manage-header {
+      background: var(--navy-mid);
+      border-bottom: 1px solid var(--card-border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .manage-header h1 {
+      font-size: 1.1rem;
+      color: var(--gold-light);
+      flex: 1;
+    }
+
+    .manage-content {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 24px 16px;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+
+    .stat-chip {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+    }
+
+    .stat-chip .num { font-size: 1.3rem; font-weight: 700; color: var(--gold-light); display: block; }
+    .stat-chip .lbl { color: var(--muted); font-size: 0.75rem; }
+
+    .search-box {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      color: var(--white);
+      font-size: 0.95rem;
+      outline: none;
+      margin-bottom: 14px;
+      transition: border-color 0.2s;
+    }
+    .search-box:focus { border-color: var(--gold); }
+    .search-box::placeholder { color: var(--muted); }
+
+    .filter-bar {
+      display: flex;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .table-wrap {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .vocab-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    .vocab-table th {
+      background: var(--navy-light);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      padding: 10px 14px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    .vocab-table td {
+      padding: 10px 14px;
+      border-top: 1px solid var(--card-border);
+      vertical-align: middle;
+    }
+
+    .vocab-table tr.hidden-row { opacity: 0.45; }
+    .vocab-table tr.hidden-row .korean-cell { text-decoration: line-through; }
+
+    .vocab-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .badge-vocab { background: rgba(80,130,220,0.2); color: #7eb3ff; border: 1px solid rgba(80,130,220,0.3); }
+    .badge-grammar { background: rgba(76,175,100,0.2); color: #7dd5a0; border: 1px solid rgba(76,175,100,0.3); }
+    .badge-phrase { background: rgba(160,100,220,0.2); color: #c09aff; border: 1px solid rgba(160,100,220,0.3); }
+    .badge-level { background: rgba(201,168,76,0.15); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.25); }
+    .badge-memorized { background: rgba(201,168,76,0.15); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.25); }
+
+    .action-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    .btn-sm {
+      padding: 5px 12px;
+      font-size: 0.75rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .btn-sm-ghost { background: transparent; color: var(--muted); border: 1px solid var(--card-border); }
+    .btn-sm-ghost:hover { border-color: var(--muted); color: var(--white); }
+    .btn-sm-danger { background: rgba(224,82,82,0.15); color: #ff8a8a; border: 1px solid rgba(224,82,82,0.3); }
+    .btn-sm-danger:hover { background: rgba(224,82,82,0.25); }
+    .btn-sm-success { background: rgba(76,175,121,0.15); color: #7dd5a0; border: 1px solid rgba(76,175,121,0.3); }
+    .btn-sm-success:hover { background: rgba(76,175,121,0.25); }
+
+    .table-empty {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) {
+      .app-header, .manage-header { padding: 12px 16px; }
+      .main-content, .manage-content { padding: 16px 12px; }
+      .action-row { flex-direction: column; align-items: stretch; }
+      .action-row .btn { max-width: none; }
+      .vocab-table th:nth-child(4),
+      .vocab-table td:nth-child(4) { display: none; }
+    }
+
+    /* ── Utility ── */
+    .hidden { display: none !important; }
+    .mt-12 { margin-top: 12px; }
+    .gap-8 { gap: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ AUTH PAGE ═══════════════════════════════ -->
+<div id="auth-page">
+  <div class="auth-box">
+    <!-- Login form -->
+    <div id="login-form">
+      <h1>한국어 단어 학습</h1>
+      <p class="subtitle">Korean Vocabulary Flashcards</p>
+      <div class="error-msg" id="login-error"></div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" autocomplete="email" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-password" autocomplete="current-password" placeholder="••••••••" />
+      </div>
+      <button class="btn btn-primary" id="login-btn">Sign In</button>
+      <p class="auth-switch">No account? <a id="go-register">Register</a></p>
+    </div>
+
+    <!-- Register form -->
+    <div id="register-form" class="hidden">
+      <h1>Create Account</h1>
+      <p class="subtitle">한국어 단어 학습</p>
+      <div class="error-msg" id="register-error"></div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="reg-email" autocomplete="email" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="reg-password" autocomplete="new-password" placeholder="At least 6 characters" />
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="reg-confirm" autocomplete="new-password" placeholder="••••••••" />
+      </div>
+      <button class="btn btn-primary" id="register-btn">Create Account</button>
+      <p class="auth-switch">Already have an account? <a id="go-login">Sign In</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ FLASHCARD PAGE ═══════════════════════════ -->
+<div id="app-page">
+  <header class="app-header">
+    <h1>한국어 단어 학습</h1>
+    <span class="header-user" id="user-email-display"></span>
+    <button class="btn btn-ghost" id="go-manage-btn">Manage Words</button>
+    <button class="btn btn-ghost" id="logout-btn">Logout</button>
+  </header>
+
+  <main class="main-content">
+    <!-- Loading -->
+    <div id="app-loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading vocabulary…</p>
+    </div>
+
+    <!-- Study UI -->
+    <div id="study-ui" class="hidden">
+      <!-- Level filter -->
+      <div class="filter-row" id="level-filters">
+        <button class="pill active" data-level="">All</button>
+        <button class="pill" data-level="1A">1A</button>
+        <button class="pill" data-level="1B">1B</button>
+        <button class="pill" data-level="2A">2A</button>
+        <button class="pill" data-level="2B">2B</button>
+        <button class="pill" data-level="3">3</button>
+        <button class="pill" data-level="4">4</button>
+      </div>
+
+      <!-- Type filter -->
+      <div class="filter-row" id="type-filters">
+        <button class="pill active" data-type="">All Types</button>
+        <button class="pill" data-type="vocab">Vocab</button>
+        <button class="pill" data-type="grammar">Grammar</button>
+        <button class="pill" data-type="phrase">Phrases</button>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span id="progress-text">0 / 0 memorized</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      </div>
+
+      <!-- Card -->
+      <div class="card-scene" id="card-scene">
+        <div class="card-inner">
+          <div class="card-face card-front">
+            <div class="card-korean" id="card-korean"></div>
+            <div class="card-tap-hint">Tap to reveal · Space or → to flip</div>
+          </div>
+          <div class="card-face card-back">
+            <div class="card-english" id="card-english"></div>
+            <div class="card-korean-small" id="card-korean-back"></div>
+            <div class="card-meta" id="card-meta"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="action-row" id="action-row">
+        <button class="btn btn-success" id="got-it-btn">Got it ✓</button>
+        <button class="btn btn-outline" id="next-btn">Next →</button>
+      </div>
+
+      <!-- Completion -->
+      <div id="completion" class="completion hidden">
+        <div class="emoji">🎉</div>
+        <h2>All done!</h2>
+        <p id="completion-msg">You've memorized all the words in this set.</p>
+        <button class="btn btn-ghost mt-12" id="reset-filter-btn">Try a different filter</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════════════════ MANAGE PAGE ═══════════════════════════════ -->
+<div id="manage-page">
+  <header class="manage-header">
+    <h1>Word Management</h1>
+    <button class="btn btn-ghost" id="back-to-study-btn">← Flashcards</button>
+    <button class="btn btn-ghost" id="manage-logout-btn">Logout</button>
+  </header>
+
+  <main class="manage-content">
+    <!-- Loading -->
+    <div id="manage-loading" class="loading">
+      <div class="spinner"></div>
+      <p>Loading words…</p>
+    </div>
+
+    <div id="manage-ui" class="hidden">
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-chip"><span class="num" id="stat-total">0</span><span class="lbl">total</span></div>
+        <div class="stat-chip"><span class="num" id="stat-memorized">0</span><span class="lbl">memorized</span></div>
+        <div class="stat-chip"><span class="num" id="stat-hidden">0</span><span class="lbl">hidden</span></div>
+      </div>
+
+      <!-- Search -->
+      <input class="search-box" id="manage-search" type="search" placeholder="Search Korean or English…" />
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <div class="filter-row" id="manage-type-filters">
+          <button class="pill active" data-type="">All Types</button>
+          <button class="pill" data-type="vocab">Vocab</button>
+          <button class="pill" data-type="grammar">Grammar</button>
+          <button class="pill" data-type="phrase">Phrases</button>
+        </div>
+        <div class="filter-row" id="manage-level-filters">
+          <button class="pill active" data-level="">All Levels</button>
+          <button class="pill" data-level="1A">1A</button>
+          <button class="pill" data-level="1B">1B</button>
+          <button class="pill" data-level="2A">2A</button>
+          <button class="pill" data-level="2B">2B</button>
+          <button class="pill" data-level="3">3</button>
+          <button class="pill" data-level="4">4</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrap">
+        <table class="vocab-table">
+          <thead>
+            <tr>
+              <th>Korean</th>
+              <th>English</th>
+              <th>Type</th>
+              <th>Level</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="manage-tbody"></tbody>
+        </table>
+        <div id="manage-empty" class="table-empty hidden">No words match your filters.</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ═══════════════════════ CONFIG ═══════════════════════
+const SUPABASE_URL = 'https://dnwqkpgumqkrhhqgxpwp.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRud3FrcGd1bXFrcmhocWd4cHdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTMxMjgsImV4cCI6MjA5MTAyOTEyOH0.1BjJC2PSy_qgM82fSIR5KuKYWeoFtSFxAfkliMSeUNY';
+const PAGE_SIZE = 1000;
+
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ═══════════════════════ STATE ═══════════════════════
+let allVocab = [];          // [{id, korean, english, word_type, level, tags}]
+let memorizedSet = new Set(); // vocab_id
+let deletedSet = new Set();   // vocab_id
+let currentUser = null;
+
+// Flashcard state
+let activeLevel = '';   // '' = all, or '1A','1B','2A','2B','3','4'
+let activeType = '';    // '' = all, or 'vocab','grammar','phrase'
+let currentWord = null;
+let sessionSeen = new Set(); // ids shown this session
+
+// Manage state
+let manageType = '';
+let manageLevel = '';
+let manageSearch = '';
+
+// ═══════════════════════ PAGE ROUTING ═══════════════════════
+const $ = id => document.getElementById(id);
+
+function showPage(page) {
+  $('auth-page').style.display = 'none';
+  $('app-page').style.display = 'none';
+  $('manage-page').style.display = 'none';
+  $(page).style.display = '';
+}
+
+// ═══════════════════════ AUTH ═══════════════════════
+$('go-register').addEventListener('click', () => {
+  $('login-form').classList.add('hidden');
+  $('register-form').classList.remove('hidden');
+  $('login-error').style.display = 'none';
+});
+
+$('go-login').addEventListener('click', () => {
+  $('register-form').classList.add('hidden');
+  $('login-form').classList.remove('hidden');
+  $('register-error').style.display = 'none';
+});
+
+function showError(id, msg) {
+  const el = $(id);
+  el.textContent = msg;
+  el.style.display = '';
+}
+
+$('login-btn').addEventListener('click', async () => {
+  const email = $('login-email').value.trim();
+  const password = $('login-password').value;
+  $('login-error').style.display = 'none';
+  if (!email || !password) return showError('login-error', 'Please fill in all fields.');
+  $('login-btn').textContent = 'Signing in…';
+  $('login-btn').disabled = true;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  $('login-btn').textContent = 'Sign In';
+  $('login-btn').disabled = false;
+  if (error) showError('login-error', error.message);
+});
+
+$('register-btn').addEventListener('click', async () => {
+  const email = $('reg-email').value.trim();
+  const password = $('reg-password').value;
+  const confirm = $('reg-confirm').value;
+  $('register-error').style.display = 'none';
+  if (!email || !password) return showError('register-error', 'Please fill in all fields.');
+  if (password !== confirm) return showError('register-error', 'Passwords do not match.');
+  if (password.length < 6) return showError('register-error', 'Password must be at least 6 characters.');
+  $('register-btn').textContent = 'Creating account…';
+  $('register-btn').disabled = true;
+  const { error } = await sb.auth.signUp({ email, password });
+  $('register-btn').textContent = 'Create Account';
+  $('register-btn').disabled = false;
+  if (error) return showError('register-error', error.message);
+  showError('register-error', 'Check your email to confirm your account, then sign in.');
+  $('register-error').style.background = 'rgba(76,175,121,0.15)';
+  $('register-error').style.borderColor = 'rgba(76,175,121,0.4)';
+  $('register-error').style.color = '#7dd5a0';
+});
+
+// Enter key support on login/register
+['login-email','login-password'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('login-btn').click(); });
+});
+['reg-email','reg-password','reg-confirm'].forEach(id => {
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') $('register-btn').click(); });
+});
+
+// ═══════════════════════ LOGOUT ═══════════════════════
+async function logout() {
+  await sb.auth.signOut();
+  allVocab = [];
+  memorizedSet.clear();
+  deletedSet.clear();
+  currentUser = null;
+}
+
+$('logout-btn').addEventListener('click', logout);
+$('manage-logout-btn').addEventListener('click', logout);
+
+// ═══════════════════════ DATA LOADING ═══════════════════════
+async function loadAllVocab() {
+  let all = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await sb.from('vocab').select('*').range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    all = all.concat(data);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  return all;
+}
+
+async function loadUserData(userId) {
+  const [progRes, delRes] = await Promise.all([
+    sb.from('user_progress').select('vocab_id, memorized').eq('user_id', userId),
+    sb.from('user_deleted').select('vocab_id').eq('user_id', userId),
+  ]);
+  if (progRes.error) throw progRes.error;
+  if (delRes.error) throw delRes.error;
+  memorizedSet.clear();
+  deletedSet.clear();
+  for (const row of progRes.data) {
+    if (row.memorized) memorizedSet.add(row.vocab_id);
+  }
+  for (const row of delRes.data) {
+    deletedSet.add(row.vocab_id);
+  }
+}
+
+async function initApp(user) {
+  currentUser = user;
+  $('user-email-display').textContent = user.email;
+  showPage('app-page');
+  $('app-loading').classList.remove('hidden');
+  $('study-ui').classList.add('hidden');
+
+  try {
+    if (allVocab.length === 0) {
+      allVocab = await loadAllVocab();
+    }
+    await loadUserData(user.id);
+    $('app-loading').classList.add('hidden');
+    $('study-ui').classList.remove('hidden');
+    pickNext();
+    updateProgress();
+  } catch (err) {
+    $('app-loading').innerHTML = `<p style="color:var(--review)">Error loading data: ${err.message}</p>`;
+  }
+}
+
+// ═══════════════════════ LEVEL MATCHING ═══════════════════════
+function matchesLevel(word, levelFilter) {
+  if (!levelFilter) return true;
+  const wl = word.level || '';
+  if (levelFilter === '3') return wl === '3A' || wl === '3B' || wl === '3';
+  if (levelFilter === '4') return wl === '4A' || wl === '4B' || wl === '4';
+  return wl === levelFilter;
+}
+
+function matchesType(word, typeFilter) {
+  if (!typeFilter) return true;
+  return word.word_type === typeFilter;
+}
+
+// ═══════════════════════ FLASHCARD LOGIC ═══════════════════════
+function getFilteredWords() {
+  return allVocab.filter(w =>
+    !deletedSet.has(w.id) &&
+    matchesLevel(w, activeLevel) &&
+    matchesType(w, activeType)
+  );
+}
+
+function getUnmemorized() {
+  return getFilteredWords().filter(w => !memorizedSet.has(w.id));
+}
+
+function pickNext() {
+  const pool = getUnmemorized();
+  if (pool.length === 0) {
+    showCompletion();
+    return;
+  }
+
+  // Prefer unseen this session; if all seen, reset
+  let candidates = pool.filter(w => !sessionSeen.has(w.id));
+  if (candidates.length === 0) {
+    sessionSeen.clear();
+    candidates = pool;
+  }
+
+  currentWord = candidates[Math.floor(Math.random() * candidates.length)];
+  sessionSeen.add(currentWord.id);
+  renderCard();
+}
+
+function renderCard() {
+  if (!currentWord) return;
+  $('completion').classList.add('hidden');
+  $('card-scene').classList.remove('hidden');
+  $('action-row').classList.remove('hidden');
+
+  // Reset flip
+  $('card-scene').classList.remove('flipped');
+
+  $('card-korean').textContent = currentWord.korean;
+  $('card-english').textContent = currentWord.english;
+  $('card-korean-back').textContent = currentWord.korean;
+
+  const meta = $('card-meta');
+  meta.innerHTML = '';
+  if (currentWord.word_type) {
+    const b = document.createElement('span');
+    b.className = `badge badge-${currentWord.word_type}`;
+    b.textContent = currentWord.word_type;
+    meta.appendChild(b);
+  }
+  if (currentWord.level) {
+    const b = document.createElement('span');
+    b.className = 'badge badge-level';
+    b.textContent = currentWord.level;
+    meta.appendChild(b);
+  }
+}
+
+function showCompletion() {
+  $('card-scene').classList.add('hidden');
+  $('action-row').classList.add('hidden');
+  const filtered = getFilteredWords();
+  $('completion-msg').textContent =
+    filtered.length === 0
+      ? 'No words in this filter.'
+      : `You've memorized all ${filtered.length} words in this set!`;
+  $('completion').classList.remove('hidden');
+}
+
+function updateProgress() {
+  const filtered = getFilteredWords();
+  const total = filtered.length;
+  const mem = filtered.filter(w => memorizedSet.has(w.id)).length;
+  const pct = total > 0 ? Math.round((mem / total) * 100) : 0;
+  $('progress-text').textContent = `${mem} / ${total} memorized`;
+  $('progress-pct').textContent = pct + '%';
+  $('progress-fill').style.width = pct + '%';
+}
+
+// Card flip
+$('card-scene').addEventListener('click', () => {
+  $('card-scene').classList.toggle('flipped');
+});
+
+// Got it
+$('got-it-btn').addEventListener('click', async () => {
+  if (!currentWord) return;
+  const id = currentWord.id;
+  memorizedSet.add(id);
+  updateProgress();
+  pickNext();
+  // Persist
+  await sb.from('user_progress').upsert({
+    user_id: currentUser.id,
+    vocab_id: id,
+    memorized: true,
+    updated_at: new Date().toISOString(),
+  });
+});
+
+// Next
+$('next-btn').addEventListener('click', () => {
+  if (!currentWord) return;
+  pickNext();
+});
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  if ($('app-page').style.display === 'none') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+  if (e.key === ' ' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    const flipped = $('card-scene').classList.contains('flipped');
+    if (!flipped) {
+      $('card-scene').classList.add('flipped');
+    } else {
+      pickNext();
+    }
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const flipped = $('card-scene').classList.contains('flipped');
+    if (flipped) $('got-it-btn').click();
+  }
+});
+
+// Level filters
+$('level-filters').addEventListener('click', e => {
+  const pill = e.target.closest('[data-level]');
+  if (!pill) return;
+  $('level-filters').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  activeLevel = pill.dataset.level;
+  sessionSeen.clear();
+  updateProgress();
+  pickNext();
+});
+
+// Type filters
+$('type-filters').addEventListener('click', e => {
+  const pill = e.target.closest('[data-type]');
+  if (!pill) return;
+  $('type-filters').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  activeType = pill.dataset.type;
+  sessionSeen.clear();
+  updateProgress();
+  pickNext();
+});
+
+// Completion reset
+$('reset-filter-btn').addEventListener('click', () => {
+  activeLevel = '';
+  activeType = '';
+  $('level-filters').querySelectorAll('.pill').forEach((p, i) => p.classList.toggle('active', i === 0));
+  $('type-filters').querySelectorAll('.pill').forEach((p, i) => p.classList.toggle('active', i === 0));
+  sessionSeen.clear();
+  updateProgress();
+  pickNext();
+});
+
+// ═══════════════════════ MANAGE PAGE ═══════════════════════
+$('go-manage-btn').addEventListener('click', openManagePage);
+$('back-to-study-btn').addEventListener('click', () => {
+  showPage('app-page');
+});
+
+async function openManagePage() {
+  showPage('manage-page');
+  $('manage-loading').classList.remove('hidden');
+  $('manage-ui').classList.add('hidden');
+
+  try {
+    // Reload user data to get fresh state
+    await loadUserData(currentUser.id);
+    renderManageStats();
+    renderManageTable();
+    $('manage-loading').classList.add('hidden');
+    $('manage-ui').classList.remove('hidden');
+  } catch (err) {
+    $('manage-loading').innerHTML = `<p style="color:var(--review)">Error: ${err.message}</p>`;
+  }
+}
+
+function renderManageStats() {
+  const total = allVocab.length;
+  const memorized = memorizedSet.size;
+  const hidden = deletedSet.size;
+  $('stat-total').textContent = total;
+  $('stat-memorized').textContent = memorized;
+  $('stat-hidden').textContent = hidden;
+}
+
+function getManageFiltered() {
+  const q = manageSearch.toLowerCase();
+  return allVocab.filter(w => {
+    if (manageType && w.word_type !== manageType) return false;
+    if (manageLevel && !matchesLevel(w, manageLevel)) return false;
+    if (q && !w.korean.toLowerCase().includes(q) && !w.english.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+
+function renderManageTable() {
+  const words = getManageFiltered();
+  const tbody = $('manage-tbody');
+  const empty = $('manage-empty');
+
+  if (words.length === 0) {
+    tbody.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+
+  const rows = words.map(w => {
+    const isHidden = deletedSet.has(w.id);
+    const isMem = memorizedSet.has(w.id);
+    const typeClass = `badge-${w.word_type}`;
+
+    const actions = [];
+    if (isMem) {
+      actions.push(`<button class="btn-sm btn-sm-ghost" data-action="unmemorize" data-id="${w.id}">Unmemorize</button>`);
+    }
+    if (isHidden) {
+      actions.push(`<button class="btn-sm btn-sm-success" data-action="restore" data-id="${w.id}">Restore</button>`);
+    } else {
+      actions.push(`<button class="btn-sm btn-sm-danger" data-action="hide" data-id="${w.id}">Hide</button>`);
+    }
+
+    return `<tr class="${isHidden ? 'hidden-row' : ''}">
+      <td class="korean-cell">${escapeHtml(w.korean)}</td>
+      <td>${escapeHtml(w.english)}</td>
+      <td><span class="badge ${typeClass}">${escapeHtml(w.word_type)}</span></td>
+      <td>${w.level ? `<span class="badge badge-level">${escapeHtml(w.level)}</span>` : ''}</td>
+      <td>${isMem ? '<span class="badge badge-memorized">Memorized</span>' : ''}</td>
+      <td><div class="action-btns">${actions.join('')}</div></td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.join('');
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Manage table actions (event delegation)
+$('manage-tbody').addEventListener('click', async e => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
+  const action = btn.dataset.action;
+  const id = parseInt(btn.dataset.id);
+  btn.disabled = true;
+
+  try {
+    if (action === 'hide') {
+      await sb.from('user_deleted').upsert({ user_id: currentUser.id, vocab_id: id, deleted_at: new Date().toISOString() });
+      deletedSet.add(id);
+    } else if (action === 'restore') {
+      await sb.from('user_deleted').delete().eq('user_id', currentUser.id).eq('vocab_id', id);
+      deletedSet.delete(id);
+    } else if (action === 'unmemorize') {
+      await sb.from('user_progress').delete().eq('user_id', currentUser.id).eq('vocab_id', id);
+      memorizedSet.delete(id);
+    }
+    renderManageStats();
+    renderManageTable();
+    updateProgress();
+  } catch (err) {
+    btn.disabled = false;
+    alert('Error: ' + err.message);
+  }
+});
+
+// Manage filters
+$('manage-search').addEventListener('input', e => {
+  manageSearch = e.target.value;
+  renderManageTable();
+});
+
+$('manage-type-filters').addEventListener('click', e => {
+  const pill = e.target.closest('[data-type]');
+  if (!pill) return;
+  $('manage-type-filters').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  manageType = pill.dataset.type;
+  renderManageTable();
+});
+
+$('manage-level-filters').addEventListener('click', e => {
+  const pill = e.target.closest('[data-level]');
+  if (!pill) return;
+  $('manage-level-filters').querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  manageLevel = pill.dataset.level;
+  renderManageTable();
+});
+
+// ═══════════════════════ AUTH STATE ═══════════════════════
+sb.auth.onAuthStateChange(async (event, session) => {
+  if (session?.user) {
+    await initApp(session.user);
+  } else {
+    showPage('auth-page');
+    $('login-form').classList.remove('hidden');
+    $('register-form').classList.add('hidden');
+  }
+});
+</script>
+</body>
+</html>

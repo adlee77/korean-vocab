@@ -1,4 +1,5 @@
 vocab.db
+vocab.json
 .secret_key
 __pycache__/
 *.pyc
