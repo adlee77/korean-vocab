@@ -581,8 +581,10 @@
         <button class="pill" data-level="1B">1B</button>
         <button class="pill" data-level="2A">2A</button>
         <button class="pill" data-level="2B">2B</button>
-        <button class="pill" data-level="3">3</button>
-        <button class="pill" data-level="4">4</button>
+        <button class="pill" data-level="3A">3A</button>
+        <button class="pill" data-level="3B">3B</button>
+        <button class="pill" data-level="4A">4A</button>
+        <button class="pill" data-level="4B">4B</button>
       </div>
 
       <!-- Type filter -->
@@ -674,8 +676,10 @@
           <button class="pill" data-level="1B">1B</button>
           <button class="pill" data-level="2A">2A</button>
           <button class="pill" data-level="2B">2B</button>
-          <button class="pill" data-level="3">3</button>
-          <button class="pill" data-level="4">4</button>
+          <button class="pill" data-level="3A">3A</button>
+          <button class="pill" data-level="3B">3B</button>
+          <button class="pill" data-level="4A">4A</button>
+          <button class="pill" data-level="4B">4B</button>
         </div>
       </div>
 
@@ -865,10 +869,7 @@ async function initApp(user) {
 // ═══════════════════════ LEVEL MATCHING ═══════════════════════
 function matchesLevel(word, levelFilter) {
   if (!levelFilter) return true;
-  const wl = word.level || '';
-  if (levelFilter === '3') return wl === '3A' || wl === '3B' || wl === '3';
-  if (levelFilter === '4') return wl === '4A' || wl === '4B' || wl === '4';
-  return wl === levelFilter;
+  return (word.level || '') === levelFilter;
 }
 
 function matchesType(word, typeFilter) {
