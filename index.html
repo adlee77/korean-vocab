@@ -776,11 +776,14 @@ $('register-btn').addEventListener('click', async () => {
   if (password.length < 6) return showError('register-error', 'Password must be at least 6 characters.');
   $('register-btn').textContent = 'Creating account…';
   $('register-btn').disabled = true;
-  const { error } = await sb.auth.signUp({ email, password });
+  const { data, error } = await sb.auth.signUp({ email, password });
   $('register-btn').textContent = 'Create Account';
   $('register-btn').disabled = false;
   if (error) return showError('register-error', error.message);
-  showError('register-error', 'Check your email to confirm your account, then sign in.');
+  // If session is immediately available (email confirm disabled), we're logged in
+  if (data.session) return; // onAuthStateChange will handle the redirect
+  // Otherwise email confirmation is required
+  showError('register-error', '✉️ Check your email to confirm your account, then sign in.');
   $('register-error').style.background = 'rgba(76,175,121,0.15)';
   $('register-error').style.borderColor = 'rgba(76,175,121,0.4)';
   $('register-error').style.color = '#7dd5a0';
