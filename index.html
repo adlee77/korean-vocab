@@ -736,7 +736,7 @@ function showPage(page) {
   $('auth-page').style.display = 'none';
   $('app-page').style.display = 'none';
   $('manage-page').style.display = 'none';
-  $(page).style.display = '';
+  $(page).style.display = page === 'auth-page' ? 'flex' : 'block';
 }
 
 // ═══════════════════════ AUTH ═══════════════════════
@@ -755,7 +755,7 @@ $('go-login').addEventListener('click', () => {
 function showError(id, msg) {
   const el = $(id);
   el.textContent = msg;
-  el.style.display = '';
+  el.style.display = 'block';
 }
 
 $('login-btn').addEventListener('click', async () => {
@@ -765,10 +765,14 @@ $('login-btn').addEventListener('click', async () => {
   if (!email || !password) return showError('login-error', 'Please fill in all fields.');
   $('login-btn').textContent = 'Signing in…';
   $('login-btn').disabled = true;
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  try {
+    const { error } = await withTimeout(sb.auth.signInWithPassword({ email, password }), 15000);
+    if (error) showError('login-error', error.message);
+  } catch (err) {
+    showError('login-error', err.message);
+  }
   $('login-btn').textContent = 'Sign In';
   $('login-btn').disabled = false;
-  if (error) showError('login-error', error.message);
 });
 
 $('register-btn').addEventListener('click', async () => {
@@ -815,11 +819,21 @@ $('logout-btn').addEventListener('click', logout);
 $('manage-logout-btn').addEventListener('click', logout);
 
 // ═══════════════════════ DATA LOADING ═══════════════════════
+function withTimeout(promise, ms) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Request timed out. Your Supabase project may be paused — visit supabase.com/dashboard to resume it, then refresh.')), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 async function loadAllVocab() {
   let all = [];
   let from = 0;
   while (true) {
-    const { data, error } = await sb.from('vocab').select('*').range(from, from + PAGE_SIZE - 1);
+    const { data, error } = await withTimeout(
+      sb.from('vocab').select('*').range(from, from + PAGE_SIZE - 1),
+      15000
+    );
     if (error) throw error;
     all = all.concat(data);
     if (data.length < PAGE_SIZE) break;
@@ -829,10 +843,10 @@ async function loadAllVocab() {
 }
 
 async function loadUserData(userId) {
-  const [progRes, delRes] = await Promise.all([
+  const [progRes, delRes] = await withTimeout(Promise.all([
     sb.from('user_progress').select('vocab_id, memorized').eq('user_id', userId),
     sb.from('user_deleted').select('vocab_id').eq('user_id', userId),
-  ]);
+  ]), 15000);
   if (progRes.error) throw progRes.error;
   if (delRes.error) throw delRes.error;
   memorizedSet.clear();
