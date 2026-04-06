@@ -66,6 +66,18 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    try:
+        conn.execute("ALTER TABLE vocab ADD COLUMN word_type TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_deleted (
+            user_id INTEGER NOT NULL,
+            vocab_id INTEGER NOT NULL,
+            deleted_at INTEGER DEFAULT (strftime('%s','now')),
+            PRIMARY KEY (user_id, vocab_id)
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -93,6 +105,19 @@ def migrate_andrews_progress():
             "INSERT OR IGNORE INTO user_progress (user_id, vocab_id, memorized, last_shown) VALUES (?,?,1,?)",
             (user_id, v["id"], v["last_shown"]),
         )
+    conn.commit()
+    conn.close()
+
+
+def migrate_word_types():
+    conn = get_db()
+    conn.execute('UPDATE vocab SET word_type = "grammar" WHERE tags LIKE "%Korean_grammar%"')
+    conn.execute(
+        'UPDATE vocab SET word_type = "phrase" WHERE word_type IS NULL AND '
+        '(tags LIKE "%Korean_pattern_practice%" OR tags LIKE "%Korean_plain_polite%" '
+        'OR tags LIKE "%Korean_formal_polite%" OR tags LIKE "%Korean_intimate%")'
+    )
+    conn.execute('UPDATE vocab SET word_type = "vocab" WHERE word_type IS NULL')
     conn.commit()
     conn.close()
 
@@ -314,11 +339,15 @@ HTML = """<!DOCTYPE html>
   .filter-wrap {
     display: flex;
     gap: 8px;
-    margin-bottom: 24px;
+    margin-bottom: 10px;
     flex-wrap: wrap;
     justify-content: center;
     width: 100%;
     max-width: 520px;
+  }
+
+  .filter-wrap:last-of-type {
+    margin-bottom: 24px;
   }
 
   .filter-btn {
@@ -586,7 +615,7 @@ HTML = """<!DOCTYPE html>
 
 <header>
   <h1>한국어 단어 학습<span>Korean Vocabulary · SNU Series</span></h1>
-  <div class="user-bar">{{ user_email }}<a href="/logout">Logout</a></div>
+  <div class="user-bar">{{ user_email }}<a href="/settings/words">Manage Words</a><a href="/logout">Logout</a></div>
 </header>
 
 <div class="filter-wrap" id="filter-wrap">
@@ -595,6 +624,13 @@ HTML = """<!DOCTYPE html>
   <button class="filter-btn" data-level="1B" onclick="setFilter('1B')">SNU 1B</button>
   <button class="filter-btn" data-level="2A" onclick="setFilter('2A')">SNU 2A</button>
   <button class="filter-btn" data-level="2B" onclick="setFilter('2B')">SNU 2B</button>
+</div>
+
+<div class="filter-wrap" id="type-filter-wrap">
+  <button class="filter-btn active" data-type="all" onclick="setTypeFilter('all')">All Types</button>
+  <button class="filter-btn" data-type="vocab" onclick="setTypeFilter('vocab')">Vocab</button>
+  <button class="filter-btn" data-type="grammar" onclick="setTypeFilter('grammar')">Grammar</button>
+  <button class="filter-btn" data-type="phrase" onclick="setTypeFilter('phrase')">Phrases</button>
 </div>
 
 <div class="progress-wrap">
@@ -620,11 +656,20 @@ HTML = """<!DOCTYPE html>
 let currentId = null;
 let revealed = false;
 let activeFilter = 'all';
+let activeType = 'all';
 
 function setFilter(level) {
   activeFilter = level;
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+  document.querySelectorAll('#filter-wrap .filter-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.level === level);
+  });
+  loadCard();
+}
+
+function setTypeFilter(type) {
+  activeType = type;
+  document.querySelectorAll('#type-filter-wrap .filter-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === type);
   });
   loadCard();
 }
@@ -633,7 +678,11 @@ async function loadCard() {
   revealed = false;
   document.getElementById('actions').classList.remove('visible');
 
-  const url = activeFilter === 'all' ? '/api/next' : `/api/next?level=${activeFilter}`;
+  const params = new URLSearchParams();
+  if (activeFilter !== 'all') params.set('level', activeFilter);
+  if (activeType !== 'all') params.set('type', activeType);
+  const qs = params.toString();
+  const url = qs ? `/api/next?${qs}` : '/api/next';
   const res = await fetch(url);
   const data = await res.json();
 
@@ -739,12 +788,293 @@ loadCard();
 </html>
 """
 
+SETTINGS_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Management · Korean Vocab</title>
+<style>
+  :root {
+    --navy: #0d1b2e; --navy-mid: #132338; --navy-light: #1e3352;
+    --gold: #c9a84c; --gold-light: #e8c97a; --gold-dim: #7a6130;
+    --white: #f0f4ff; --muted: #8899bb;
+    --card-bg: #162340; --card-border: #1e3a5f; --radius: 16px;
+    --success: #4caf79; --blue: #4c8fcf; --purple: #9b6fc9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--navy); color: var(--white); min-height: 100vh; padding: 24px 16px;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    max-width: 900px; margin: 0 auto 24px; flex-wrap: wrap; gap: 12px;
+  }
+  header h1 { font-size: 1.4rem; font-weight: 700; color: var(--gold-light); }
+  .header-links { display: flex; gap: 16px; font-size: 0.82rem; }
+  .header-links a { color: var(--muted); text-decoration: underline; }
+  .header-links a:hover { color: var(--gold); }
+  .stats {
+    max-width: 900px; margin: 0 auto 20px;
+    font-size: 0.85rem; color: var(--muted);
+  }
+  .stats span { margin-right: 16px; }
+  .stats strong { color: var(--gold); }
+  .controls {
+    max-width: 900px; margin: 0 auto 16px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .search-input {
+    width: 100%; padding: 10px 14px; background: var(--card-bg);
+    border: 1px solid var(--card-border); border-radius: 10px;
+    color: var(--white); font-size: 0.95rem; outline: none; transition: border-color 0.15s;
+  }
+  .search-input:focus { border-color: var(--gold); }
+  .filter-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .filter-btn {
+    padding: 5px 14px; border-radius: 100px; border: 1px solid var(--card-border);
+    background: var(--navy-light); color: var(--muted); font-size: 0.8rem;
+    font-weight: 600; cursor: pointer; transition: all 0.15s; letter-spacing: 0.04em;
+  }
+  .filter-btn:hover { border-color: var(--gold-dim); color: var(--gold-light); }
+  .filter-btn.active { background: var(--gold-dim); border-color: var(--gold); color: var(--gold-light); }
+  .table-wrap {
+    max-width: 900px; margin: 0 auto;
+    background: var(--card-bg); border: 1px solid var(--card-border); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 12px 16px; font-size: 0.75rem;
+    font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted); border-bottom: 1px solid var(--card-border); background: var(--navy-mid);
+  }
+  td { padding: 11px 16px; font-size: 0.88rem; border-bottom: 1px solid rgba(30,58,95,0.5); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.deleted td { opacity: 0.45; }
+  tr.deleted .korean-cell { text-decoration: line-through; }
+  .korean-cell { font-size: 1.1rem; font-weight: 600; color: var(--white); }
+  .english-cell { color: var(--muted); max-width: 260px; }
+  .badge {
+    display: inline-block; padding: 2px 9px; border-radius: 100px;
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em;
+  }
+  .badge-vocab { background: rgba(76,143,207,0.2); color: #7db8e8; border: 1px solid rgba(76,143,207,0.35); }
+  .badge-grammar { background: rgba(76,175,121,0.2); color: #7dcca0; border: 1px solid rgba(76,175,121,0.35); }
+  .badge-phrase { background: rgba(155,111,201,0.2); color: #c09ee0; border: 1px solid rgba(155,111,201,0.35); }
+  .badge-level { background: rgba(201,168,76,0.15); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.3); }
+  .badge-memorized { background: rgba(201,168,76,0.15); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.3); }
+  .actions-cell { display: flex; gap: 6px; flex-wrap: wrap; }
+  .act-btn {
+    padding: 4px 10px; border-radius: 8px; border: 1px solid var(--card-border);
+    background: var(--navy-light); color: var(--muted); font-size: 0.75rem;
+    font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .act-btn:hover { border-color: var(--gold-dim); color: var(--gold-light); }
+  .act-btn.danger:hover { border-color: rgba(224,82,82,0.5); color: #e08080; }
+  .act-btn.restore { border-color: rgba(76,175,121,0.4); color: #7dcca0; }
+  .act-btn.restore:hover { border-color: var(--success); color: var(--success); }
+  .empty { padding: 48px; text-align: center; color: var(--muted); font-size: 0.9rem; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Word Management</h1>
+  <div class="header-links">
+    <a href="/">← Back to Flashcards</a>
+    <a href="/logout">Logout</a>
+  </div>
+</header>
+
+<div class="stats" id="stats">Loading...</div>
+
+<div class="controls">
+  <input class="search-input" id="search" type="text" placeholder="Search Korean or English…">
+  <div class="filter-row" id="type-filters">
+    <button class="filter-btn active" data-type="all">All Types</button>
+    <button class="filter-btn" data-type="vocab">Vocab</button>
+    <button class="filter-btn" data-type="grammar">Grammar</button>
+    <button class="filter-btn" data-type="phrase">Phrases</button>
+  </div>
+  <div class="filter-row" id="level-filters">
+    <button class="filter-btn active" data-level="all">All Levels</button>
+    <button class="filter-btn" data-level="1A">1A</button>
+    <button class="filter-btn" data-level="1B">1B</button>
+    <button class="filter-btn" data-level="2A">2A</button>
+    <button class="filter-btn" data-level="2B">2B</button>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Korean</th>
+        <th>English</th>
+        <th>Type</th>
+        <th>Level</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="words-body">
+      <tr><td colspan="6" class="empty">Loading words…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+let allWords = [];
+let activeType = 'all';
+let activeLevel = 'all';
+let searchTerm = '';
+let searchTimer = null;
+
+function extractLevel(tags) {
+  if (!tags) return '';
+  const m = tags.match(/SNU\\.lvl\\.(\\d[AB]?)/i);
+  return m ? m[1].toUpperCase() : '';
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str || '';
+  return d.innerHTML;
+}
+
+async function loadWords() {
+  const res = await fetch('/api/words?per_page=9999');
+  const data = await res.json();
+  allWords = data.words || [];
+  updateStats();
+  renderTable();
+}
+
+function updateStats() {
+  const total = allWords.length;
+  const memorized = allWords.filter(w => w.memorized).length;
+  const hidden = allWords.filter(w => w.deleted).length;
+  document.getElementById('stats').innerHTML =
+    `<span><strong>${total}</strong> total</span>` +
+    `<span><strong>${memorized}</strong> memorized</span>` +
+    `<span><strong>${hidden}</strong> hidden</span>`;
+}
+
+function renderTable() {
+  const q = searchTerm.toLowerCase();
+  const filtered = allWords.filter(w => {
+    if (activeType !== 'all' && w.word_type !== activeType) return false;
+    if (activeLevel !== 'all') {
+      const lvl = extractLevel(w.tags);
+      if (lvl !== activeLevel) return false;
+    }
+    if (q && !w.korean.toLowerCase().includes(q) && !w.english.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('words-body');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">No words match.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(w => {
+    const lvl = extractLevel(w.tags);
+    const typeClass = w.word_type === 'grammar' ? 'badge-grammar' : w.word_type === 'phrase' ? 'badge-phrase' : 'badge-vocab';
+    const typeLabel = w.word_type || 'vocab';
+
+    let actions = '';
+    if (w.deleted) {
+      actions = `<button class="act-btn restore" onclick="restoreWord(${w.id})">Restore</button>`;
+    } else {
+      if (w.memorized) {
+        actions += `<button class="act-btn" onclick="unmemorizeWord(${w.id})">Unmemorize</button>`;
+      }
+      actions += `<button class="act-btn danger" onclick="hideWord(${w.id})">Hide</button>`;
+    }
+
+    const statusBadge = w.memorized ? '<span class="badge badge-memorized">Memorized</span>' : '';
+    const rowClass = w.deleted ? 'deleted' : '';
+
+    return `<tr class="${rowClass}" id="row-${w.id}">
+      <td class="korean-cell">${escHtml(w.korean)}</td>
+      <td class="english-cell">${escHtml(w.english)}</td>
+      <td><span class="badge ${typeClass}">${escHtml(typeLabel)}</span></td>
+      <td>${lvl ? `<span class="badge badge-level">${escHtml(lvl)}</span>` : ''}</td>
+      <td>${statusBadge}</td>
+      <td><div class="actions-cell">${actions}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+async function hideWord(id) {
+  await fetch(`/api/words/${id}/delete`, {method: 'POST'});
+  const w = allWords.find(x => x.id === id);
+  if (w) w.deleted = 1;
+  updateStats();
+  renderTable();
+}
+
+async function restoreWord(id) {
+  await fetch(`/api/words/${id}/restore`, {method: 'POST'});
+  const w = allWords.find(x => x.id === id);
+  if (w) w.deleted = 0;
+  updateStats();
+  renderTable();
+}
+
+async function unmemorizeWord(id) {
+  await fetch(`/api/words/${id}/unmemorize`, {method: 'POST'});
+  const w = allWords.find(x => x.id === id);
+  if (w) w.memorized = 0;
+  updateStats();
+  renderTable();
+}
+
+document.getElementById('type-filters').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  activeType = btn.dataset.type;
+  document.querySelectorAll('#type-filters .filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+  renderTable();
+});
+
+document.getElementById('level-filters').addEventListener('click', e => {
+  const btn = e.target.closest('.filter-btn');
+  if (!btn) return;
+  activeLevel = btn.dataset.level;
+  document.querySelectorAll('#level-filters .filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+  renderTable();
+});
+
+document.getElementById('search').addEventListener('input', e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    searchTerm = e.target.value;
+    renderTable();
+  }, 200);
+});
+
+loadWords();
+</script>
+</body>
+</html>
+"""
+
 
 def level_filter_clause(level):
     """Return a WHERE fragment and params tuple for a given level filter."""
     if not level or level == "all":
         return "", []
     return "AND v.tags LIKE ?", [f"%SNU.lvl.{level}%"]
+
+
+def type_filter_clause(word_type):
+    """Return a WHERE fragment and params tuple for a word_type filter."""
+    if not word_type or word_type == "all":
+        return "", []
+    return "AND v.word_type = ?", [word_type]
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -811,15 +1141,28 @@ def index():
 def api_next():
     user_id = session["user_id"]
     level = request.args.get("level", "").strip()
-    clause, params = level_filter_clause(level)
+    word_type = request.args.get("type", "").strip()
+    lclause, lparams = level_filter_clause(level)
+    tclause, tparams = type_filter_clause(word_type)
+    filter_clause = f"{lclause} {tclause}".strip()
+    filter_params = lparams + tparams
 
     conn = get_db()
     cur = conn.cursor()
 
-    total = cur.execute(f"SELECT COUNT(*) FROM vocab v WHERE 1=1 {clause}", params).fetchone()[0]
+    total = cur.execute(
+        f"""SELECT COUNT(*) FROM vocab v
+            LEFT JOIN user_deleted ud ON ud.vocab_id = v.id AND ud.user_id = ?
+            WHERE ud.vocab_id IS NULL {filter_clause}""",
+        [user_id] + filter_params,
+    ).fetchone()[0]
+
     memorized = cur.execute(
-        f"SELECT COUNT(*) FROM user_progress up LEFT JOIN vocab v ON v.id = up.vocab_id WHERE up.user_id=? AND up.memorized=1 {clause}",
-        [user_id] + params,
+        f"""SELECT COUNT(*) FROM user_progress up
+            LEFT JOIN vocab v ON v.id = up.vocab_id
+            LEFT JOIN user_deleted ud ON ud.vocab_id = v.id AND ud.user_id = ?
+            WHERE up.user_id=? AND up.memorized=1 AND ud.vocab_id IS NULL {filter_clause}""",
+        [user_id, user_id] + filter_params,
     ).fetchone()[0]
 
     if total == 0 or memorized == total:
@@ -829,9 +1172,10 @@ def api_next():
     rows = cur.execute(
         f"""SELECT v.id, v.korean, v.english, v.tags FROM vocab v
             LEFT JOIN user_progress up ON up.vocab_id = v.id AND up.user_id = ?
-            WHERE (up.memorized IS NULL OR up.memorized = 0) {clause}
+            LEFT JOIN user_deleted ud ON ud.vocab_id = v.id AND ud.user_id = ?
+            WHERE (up.memorized IS NULL OR up.memorized = 0) AND ud.vocab_id IS NULL {filter_clause}
             ORDER BY COALESCE(up.last_shown, 0) ASC LIMIT 50""",
-        [user_id] + params,
+        [user_id, user_id] + filter_params,
     ).fetchall()
     conn.close()
 
@@ -891,6 +1235,100 @@ def api_reset():
     return jsonify({"ok": True})
 
 
+@app.route("/api/words")
+@login_required
+def api_words():
+    user_id = session["user_id"]
+    search = request.args.get("search", "").strip()
+    word_type = request.args.get("type", "").strip()
+    level = request.args.get("level", "").strip()
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = min(9999, max(1, int(request.args.get("per_page", 100))))
+    offset = (page - 1) * per_page
+
+    clauses = []
+    params = [user_id, user_id]
+
+    if search:
+        clauses.append("AND (v.korean LIKE ? OR v.english LIKE ?)")
+        params += [f"%{search}%", f"%{search}%"]
+    if word_type and word_type != "all":
+        clauses.append("AND v.word_type = ?")
+        params.append(word_type)
+    if level and level != "all":
+        clauses.append("AND v.tags LIKE ?")
+        params.append(f"%SNU.lvl.{level}%")
+
+    extra = " ".join(clauses)
+    params_paged = params + [per_page, offset]
+
+    conn = get_db()
+    rows = conn.execute(
+        f"""SELECT v.id, v.korean, v.english, v.word_type, v.tags,
+                   COALESCE(up.memorized, 0) AS memorized,
+                   CASE WHEN ud.vocab_id IS NOT NULL THEN 1 ELSE 0 END AS deleted
+            FROM vocab v
+            LEFT JOIN user_progress up ON up.vocab_id = v.id AND up.user_id = ?
+            LEFT JOIN user_deleted ud ON ud.vocab_id = v.id AND ud.user_id = ?
+            WHERE 1=1 {extra}
+            ORDER BY v.id ASC
+            LIMIT ? OFFSET ?""",
+        params_paged,
+    ).fetchall()
+    conn.close()
+
+    words = [dict(r) for r in rows]
+    return jsonify({"words": words})
+
+
+@app.route("/api/words/<int:vocab_id>/delete", methods=["POST"])
+@login_required
+def api_word_delete(vocab_id):
+    user_id = session["user_id"]
+    conn = get_db()
+    conn.execute(
+        "INSERT OR IGNORE INTO user_deleted (user_id, vocab_id) VALUES (?,?)",
+        (user_id, vocab_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/words/<int:vocab_id>/restore", methods=["POST"])
+@login_required
+def api_word_restore(vocab_id):
+    user_id = session["user_id"]
+    conn = get_db()
+    conn.execute(
+        "DELETE FROM user_deleted WHERE user_id=? AND vocab_id=?",
+        (user_id, vocab_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/words/<int:vocab_id>/unmemorize", methods=["POST"])
+@login_required
+def api_word_unmemorize(vocab_id):
+    user_id = session["user_id"]
+    conn = get_db()
+    conn.execute(
+        "UPDATE user_progress SET memorized=0 WHERE user_id=? AND vocab_id=?",
+        (user_id, vocab_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/settings/words")
+@login_required
+def settings_words():
+    return render_template_string(SETTINGS_HTML)
+
+
 if __name__ == "__main__":
     if not os.path.exists(DB_PATH):
         print(f"ERROR: vocab.db not found at {DB_PATH}")
@@ -898,4 +1336,5 @@ if __name__ == "__main__":
         exit(1)
     init_db()
     migrate_andrews_progress()
+    migrate_word_types()
     app.run(host="0.0.0.0", port=5001, debug=False)

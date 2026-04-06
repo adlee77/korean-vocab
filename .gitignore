@@ -1,0 +1,7 @@
+vocab.db
+.secret_key
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.log
