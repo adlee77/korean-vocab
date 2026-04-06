@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="google-adsense-account" content="ca-pub-5130819145339406">
   <title>한국어 단어 학습</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <style>
@@ -709,6 +710,7 @@
 const SUPABASE_URL = 'https://dnwqkpgumqkrhhqgxpwp.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRud3FrcGd1bXFrcmhocWd4cHdwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU0NTMxMjgsImV4cCI6MjA5MTAyOTEyOH0.1BjJC2PSy_qgM82fSIR5KuKYWeoFtSFxAfkliMSeUNY';
 const PAGE_SIZE = 1000;
+const VOCAB_CACHE_KEY = 'korean_vocab_cache_v1';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
@@ -827,6 +829,9 @@ function withTimeout(promise, ms) {
 }
 
 async function loadAllVocab() {
+  const cached = localStorage.getItem(VOCAB_CACHE_KEY);
+  if (cached) return JSON.parse(cached);
+
   let all = [];
   let from = 0;
   while (true) {
@@ -839,6 +844,7 @@ async function loadAllVocab() {
     if (data.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
+  localStorage.setItem(VOCAB_CACHE_KEY, JSON.stringify(all));
   return all;
 }
 
@@ -1195,10 +1201,14 @@ $('manage-level-filters').addEventListener('click', e => {
 });
 
 // ═══════════════════════ AUTH STATE ═══════════════════════
+let appInitialized = false;
 sb.auth.onAuthStateChange(async (event, session) => {
   if (session?.user) {
+    if (appInitialized && currentUser?.id === session.user.id) return;
+    appInitialized = true;
     await initApp(session.user);
   } else {
+    appInitialized = false;
     showPage('auth-page');
     $('login-form').classList.remove('hidden');
     $('register-form').classList.add('hidden');
