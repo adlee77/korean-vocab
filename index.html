@@ -882,7 +882,9 @@ async function initApp(user) {
     pickNext();
     updateProgress();
   } catch (err) {
-    $('app-loading').innerHTML = `<p style="color:var(--review)">Error loading data: ${err.message}</p>`;
+    $('app-loading').innerHTML = `
+      <p style="color:var(--review);margin-bottom:16px">Error loading data: ${err.message}</p>
+      <button class="btn btn-outline" onclick="initApp(currentUser)">Retry</button>`;
   }
 }
 
