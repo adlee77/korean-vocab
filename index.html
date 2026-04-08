@@ -876,11 +876,7 @@ async function initApp(user) {
     if (allVocab.length === 0) {
       allVocab = await loadAllVocab();
     }
-    // Ensure we have a fresh token before querying user-specific data.
-    // On INITIAL_SESSION the stored token may be expired; refreshSession() gets a new one.
-    await sb.auth.refreshSession();
-    if (currentUser?.id !== user.id) return; // user logged out during load
-    await loadUserData(user.id);
+    await withTimeout(loadUserData(user.id), 30000);
     if (currentUser?.id !== user.id) return; // user logged out during load
     $('app-loading').classList.add('hidden');
     $('study-ui').classList.remove('hidden');
