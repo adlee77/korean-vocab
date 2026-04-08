@@ -849,10 +849,10 @@ async function loadAllVocab() {
 }
 
 async function loadUserData(userId) {
-  const [progRes, delRes] = await withTimeout(Promise.all([
+  const [progRes, delRes] = await Promise.all([
     sb.from('user_progress').select('vocab_id, memorized').eq('user_id', userId),
     sb.from('user_deleted').select('vocab_id').eq('user_id', userId),
-  ]), 15000);
+  ]);
   if (progRes.error) throw progRes.error;
   if (delRes.error) throw delRes.error;
   memorizedSet.clear();
@@ -876,14 +876,12 @@ async function initApp(user) {
     if (allVocab.length === 0) {
       allVocab = await loadAllVocab();
     }
-    // Retry user data once — on initial page load, Supabase fires INITIAL_SESSION before
-    // the access token refresh completes, causing the first attempt to hang/fail.
-    try {
-      await loadUserData(user.id);
-    } catch {
-      await new Promise(r => setTimeout(r, 2000));
-      await loadUserData(user.id);
-    }
+    // Ensure we have a fresh token before querying user-specific data.
+    // On INITIAL_SESSION the stored token may be expired; refreshSession() gets a new one.
+    await sb.auth.refreshSession();
+    if (currentUser?.id !== user.id) return; // user logged out during load
+    await loadUserData(user.id);
+    if (currentUser?.id !== user.id) return; // user logged out during load
     $('app-loading').classList.add('hidden');
     $('study-ui').classList.remove('hidden');
     pickNext();
