@@ -811,10 +811,6 @@ $('register-btn').addEventListener('click', async () => {
 // ═══════════════════════ LOGOUT ═══════════════════════
 async function logout() {
   await sb.auth.signOut();
-  allVocab = [];
-  memorizedSet.clear();
-  deletedSet.clear();
-  currentUser = null;
 }
 
 $('logout-btn').addEventListener('click', logout);
@@ -876,7 +872,7 @@ async function initApp(user) {
     if (allVocab.length === 0) {
       allVocab = await loadAllVocab();
     }
-    await withTimeout(loadUserData(user.id), 30000);
+    await loadUserData(user.id);
     if (currentUser?.id !== user.id) return; // user logged out during load
     $('app-loading').classList.add('hidden');
     $('study-ui').classList.remove('hidden');
@@ -1204,22 +1200,28 @@ $('manage-level-filters').addEventListener('click', e => {
 });
 
 // ═══════════════════════ AUTH STATE ═══════════════════════
-// IMPORTANT: onAuthStateChange holds the Supabase auth lock during the callback.
-// Never await auth operations inside it — use setTimeout to defer work until
-// after the callback returns and the lock is released.
-let appInitialized = false;
-sb.auth.onAuthStateChange((event, session) => {
+// On load: check session once, then show login or load the app.
+// onAuthStateChange only handles login/logout after that.
+(async () => {
+  const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
-    if (appInitialized && currentUser?.id === session.user.id) return;
-    appInitialized = true;
-    setTimeout(() => initApp(session.user), 0);
+    await initApp(session.user);
   } else {
-    appInitialized = false;
-    setTimeout(() => {
-      showPage('auth-page');
-      $('login-form').classList.remove('hidden');
-      $('register-form').classList.add('hidden');
-    }, 0);
+    showPage('auth-page');
+  }
+})();
+
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    initApp(session.user);
+  } else if (event === 'SIGNED_OUT') {
+    currentUser = null;
+    allVocab = [];
+    memorizedSet.clear();
+    deletedSet.clear();
+    showPage('auth-page');
+    $('login-form').classList.remove('hidden');
+    $('register-form').classList.add('hidden');
   }
 });
 </script>
