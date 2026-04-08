@@ -1204,17 +1204,22 @@ $('manage-level-filters').addEventListener('click', e => {
 });
 
 // ═══════════════════════ AUTH STATE ═══════════════════════
+// IMPORTANT: onAuthStateChange holds the Supabase auth lock during the callback.
+// Never await auth operations inside it — use setTimeout to defer work until
+// after the callback returns and the lock is released.
 let appInitialized = false;
-sb.auth.onAuthStateChange(async (event, session) => {
+sb.auth.onAuthStateChange((event, session) => {
   if (session?.user) {
     if (appInitialized && currentUser?.id === session.user.id) return;
     appInitialized = true;
-    await initApp(session.user);
+    setTimeout(() => initApp(session.user), 0);
   } else {
     appInitialized = false;
-    showPage('auth-page');
-    $('login-form').classList.remove('hidden');
-    $('register-form').classList.add('hidden');
+    setTimeout(() => {
+      showPage('auth-page');
+      $('login-form').classList.remove('hidden');
+      $('register-form').classList.add('hidden');
+    }, 0);
   }
 });
 </script>
